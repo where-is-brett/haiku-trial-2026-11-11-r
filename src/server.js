@@ -1,39 +1,23 @@
 // src/server.js
+import fs from 'node:fs';
 import http from 'node:http';
-import { DatabaseSync } from 'node:sqlite';
+import { openLedger } from './db.js';
+import { createHandler } from './app.js';
 
 const port = Number(process.env.PORT ?? 3000);
-const db = new DatabaseSync(process.env.LEDGER_DB ?? 'ledger.db');
-db.exec(
-  'CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY, date TEXT, description TEXT, cents INTEGER)',
-);
+const db = openLedger(process.env.LEDGER_DB ?? 'ledger.db');
 
-function page(body) {
-  return `<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Spending tracker</title></head>
-<body>
-<main>
-<h1>Spending tracker</h1>
-${body}
-</main>
-</body>
-</html>
-`;
+function readFlags() {
+  try {
+    const text = fs.readFileSync(new URL('../config/feature-flags.json', import.meta.url), 'utf8');
+    return JSON.parse(text);
+  } catch (err) {
+    if (err.code === 'ENOENT') return {};
+    throw err;
+  }
 }
 
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://localhost');
-  if (url.pathname === '/') {
-    const { n } = db.prepare('SELECT COUNT(*) AS n FROM transactions').get();
-    const body = n === 0 ? '<p>Nothing imported yet</p>' : `<p>${n} transactions imported</p>`;
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(page(body));
-    return;
-  }
-  res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-  res.end('Not found');
-});
+const server = http.createServer(createHandler({ db, flags: readFlags() }));
 
 server.listen(port, () => {
   console.log(`listening on ${server.address().port}`);
