@@ -30,6 +30,11 @@ test('a quoted thousands separator is read as the full amount', () => {
   assert.equal(row.cents, 123400);
 });
 
+test('a refund in brackets is money back and gives negative cents', () => {
+  const [row] = parseStatement('Date,Description,Amount\n15/09/2026,Marlowe Homewares REFUND,(40.00)\n');
+  assert.equal(row.cents, -4000);
+});
+
 test('a description with a comma keeps the comma', () => {
   const [row] = parseStatement('Date,Description,Amount\n06/08/2026,"Pasta, Pizza & Co REF 3946",102.29\n');
   assert.equal(row.description, 'Pasta, Pizza & Co REF 3946');
