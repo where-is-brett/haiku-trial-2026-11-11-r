@@ -1,5 +1,6 @@
 // src/app.js
 import { importStatement, StatementError } from './lib/statement.js';
+import { listMonths } from './lib/months.js';
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const CHOOSE_FILE = 'Choose a statement file to import.';
@@ -65,7 +66,16 @@ export function createHandler({ db, flags }) {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname === '/') {
       const { n } = db.prepare('SELECT COUNT(*) AS n FROM transactions').get();
-      const body = n === 0 ? '<p>Nothing imported yet</p>' : `<p>${n} transactions imported</p>`;
+      let body = n === 0 ? '<p>Nothing imported yet</p>' : `<p>${n} transactions imported</p>`;
+      if (flags?.['statement-import'] === true) {
+        const months = listMonths(db);
+        if (months.length > 0) {
+          const items = months
+            .map(({ month, count }) => `<li><a href="/month?m=${month}">Month ${month}</a> (${count} transactions)</li>`)
+            .join('\n');
+          body += `\n<ul>\n${items}\n</ul>`;
+        }
+      }
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(page(body));
       return;
