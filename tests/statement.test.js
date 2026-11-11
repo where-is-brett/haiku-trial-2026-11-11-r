@@ -131,6 +131,39 @@ test('an amount with two decimal points is refused', () => {
   });
 });
 
+test('an amount with a comma that is not thousands grouping is refused and nothing is stored', () => {
+  const db = freshDb();
+  assert.throws(() => importStatement(db, 'Date,Description,Amount\n02/08/2026,Coffee,"8,58"\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the amount is not a number.',
+  });
+  assert.equal(count(db), 0);
+});
+
+test('an amount with two commas in the wrong places is refused', () => {
+  assert.throws(() => parseStatement('Date,Description,Amount\n02/08/2026,Coffee,"1,2,3"\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the amount is not a number.',
+  });
+});
+
+test('an amount with more than two decimals is refused', () => {
+  assert.throws(() => parseStatement('Date,Description,Amount\n02/08/2026,Coffee,1.234\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the amount is not a number.',
+  });
+});
+
+test('an amount with thousands grouping and two decimals is read in full', () => {
+  const [row] = parseStatement('Date,Description,Amount\n02/08/2026,Rent,"1,234.50"\n');
+  assert.equal(row.cents, 123450);
+});
+
+test('a negative amount with thousands grouping is read as negative cents', () => {
+  const [row] = parseStatement('Date,Description,Amount\n02/08/2026,Refund,"-1,234.50"\n');
+  assert.equal(row.cents, -123450);
+});
+
 test('a bracketed amount is accepted', () => {
   assert.doesNotThrow(() => parseStatement('Date,Description,Amount\n02/08/2026,Bank fee,(40.00)\n'));
 });

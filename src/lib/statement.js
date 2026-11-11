@@ -13,7 +13,9 @@ export class StatementError extends Error {
 
 const HEADER = ['date', 'description', 'amount'];
 // A plain amount such as 8.58, -2112.90 or 1,234.00, or a bracketed one such as (40.00).
-const AMOUNT = /^(\(-?\d[\d,]*(\.\d+)?\)|-?\d[\d,]*(\.\d+)?)$/;
+// The digits are either grouped in threes with commas or plain, with at most two decimals.
+const NUMBER = '(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d{1,2})?';
+const AMOUNT = new RegExp(`^(\\(-?${NUMBER}\\)|-?${NUMBER})$`);
 const HEADER_MESSAGE ='That file is not a bank statement. Expected columns: Date, Description, Amount.';
 
 // True only for a DD/MM/YYYY date that exists in the calendar, such as 28/02/2026 but not 31/02/2026.
