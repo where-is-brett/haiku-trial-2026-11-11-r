@@ -169,8 +169,52 @@ test('a negative amount with thousands grouping is read as negative cents', () =
   assert.equal(row.cents, -123450);
 });
 
-test('a bracketed amount is accepted', () => {
-  assert.doesNotThrow(() => parseStatement('Date,Description,Amount\n02/08/2026,Bank fee,(40.00)\n'));
+test('a bracketed amount is money coming back', () => {
+  const [row] = parseStatement('Date,Description,Amount\n19/08/2026,Marlowe Homewares,(40.00)\n');
+  assert.equal(row.cents, -4000);
+});
+
+test('a minus sign is money coming back', () => {
+  const [row] = parseStatement('Date,Description,Amount\n25/08/2026,Payroll,-40.00\n');
+  assert.equal(row.cents, -4000);
+});
+
+test('a plain amount stays positive', () => {
+  const [row] = parseStatement('Date,Description,Amount\n02/08/2026,Kestrel,8.58\n');
+  assert.equal(row.cents, 858);
+});
+
+test('brackets and a minus sign together are refused', () => {
+  const db = freshDb();
+  assert.throws(() => importStatement(db, 'Date,Description,Amount\n02/08/2026,Rent,(-40.00)\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the amount is not a number.',
+  });
+  assert.equal(count(db), 0);
+});
+
+test('an amount too large for exact cents is refused', () => {
+  const db = freshDb();
+  assert.throws(() => importStatement(db, 'Date,Description,Amount\n02/08/2026,Rent,90071992547409.93\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the amount is not a number.',
+  });
+  assert.equal(count(db), 0);
+});
+
+test('an amount whose cents are not exact is refused and nothing is stored', () => {
+  const db = freshDb();
+  assert.throws(() => importStatement(db, 'Date,Description,Amount\n02/08/2026,Rent,70368744177664.99\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the amount is not a number.',
+  });
+  assert.equal(count(db), 0);
+});
+
+test('the sample refund is stored as money coming back', () => {
+  const rows = parseStatement(SAMPLE);
+  const refund = rows.find((row) => row.description === 'Marlowe Homewares REFUND');
+  assert.equal(refund.cents, -4000);
 });
 
 test('plain amounts with a minus sign are read as cents', () => {
