@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { parseStatement, importStatement } from '../src/lib/statement.js';
+import { parseStatement, importStatement, StatementError } from '../src/lib/statement.js';
 
 const SAMPLE = fs.readFileSync(new URL('../data/sample-statement.csv', import.meta.url), 'utf8');
 
@@ -50,8 +50,8 @@ test('importing the same file twice adds nothing', () => {
 
 test('a byte-order-mark CRLF file imported twice adds nothing', () => {
   const db = freshDb();
-  const text = '﻿' + SAMPLE.replace(/\n/g, '\r\n');
-  importStatement(db, text);
+  const text = '﻿' + SAMPLE.replace(/\r?\n/g, '\r\n');
+  assert.deepEqual(importStatement(db, text), { added: 128, skipped: 0 });
   assert.deepEqual(importStatement(db, text), { added: 0, skipped: 128 });
 });
 
@@ -68,4 +68,70 @@ test('a row already stored is skipped and the new rows are added', () => {
   const text = 'Date,Description,Amount\n02/08/2026,Kestrel Coffee Bar,6.50\n03/08/2026,Brightfield Power,121.00\n';
   assert.deepEqual(importStatement(db, text), { added: 1, skipped: 1 });
   assert.equal(count(db), 2);
+});
+
+test('a header is accepted with a byte-order mark, spaces and any letter case', () => {
+  const [row] = parseStatement('﻿ date ,DESCRIPTION,amount \n02/08/2026,Kestrel,6.50\n');
+  assert.equal(row.cents, 650);
+});
+
+test('a wrong header is refused and nothing is stored', () => {
+  const db = freshDb();
+  importStatement(db, SAMPLE);
+  assert.throws(() => importStatement(db, 'Date,Payee,Amount\n02/08/2026,Kestrel,6.50\n'), {
+    name: 'StatementError',
+    message: 'That file is not a bank statement. Expected columns: Date, Description, Amount.',
+  });
+  assert.equal(count(db), 128);
+});
+
+test('a row with four fields is refused', () => {
+  assert.throws(() => parseStatement('Date,Description,Amount\n02/08/2026,Rent,1,234.00\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: it does not have three columns.',
+  });
+});
+
+test('an impossible date is refused', () => {
+  assert.throws(() => parseStatement('Date,Description,Amount\n31/02/2026,Rent,5.00\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the date is not DD/MM/YYYY.',
+  });
+});
+
+test('a date in another form is refused', () => {
+  assert.throws(() => parseStatement('Date,Description,Amount\n2026-08-31,Rent,5.00\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the date is not DD/MM/YYYY.',
+  });
+});
+
+test('an amount that is not a number is refused and nothing is stored', () => {
+  const db = freshDb();
+  assert.throws(() => importStatement(db, 'Date,Description,Amount\n02/08/2026,Bank fee,\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the amount is not a number.',
+  });
+  assert.equal(count(db), 0);
+});
+
+test('a bad row late in the file stores none of the rows before it', () => {
+  const db = freshDb();
+  const text = 'Date,Description,Amount\n02/08/2026,Kestrel,6.50\n03/08/2026,Rent,abc\n';
+  assert.throws(() => importStatement(db, text), StatementError);
+  assert.equal(count(db), 0);
+});
+
+test('a header-only file is valid and adds nothing', () => {
+  const db = freshDb();
+  assert.deepEqual(importStatement(db, 'Date,Description,Amount\r\n'), { added: 0, skipped: 0 });
+  assert.equal(count(db), 0);
+});
+
+test('a database error mid-write stores nothing', () => {
+  const db = freshDb();
+  db.exec("CREATE TRIGGER refuse BEFORE INSERT ON transactions WHEN NEW.cents = 999 BEGIN SELECT RAISE(ABORT, 'refused'); END");
+  const text = 'Date,Description,Amount\n02/08/2026,A,6.50\n03/08/2026,B,4.00\n04/08/2026,C,9.99\n';
+  assert.throws(() => importStatement(db, text));
+  assert.equal(count(db), 0);
 });
