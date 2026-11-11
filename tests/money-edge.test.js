@@ -12,6 +12,10 @@ test('a negative amount is read as negative cents', () => {
   assert.equal(parseAmount('-40.00'), -4000);
 });
 
+test('a bracketed amount is money back, so it is negative cents', () => {
+  assert.equal(parseAmount('(40.00)'), -4000);
+});
+
 test('a thousands comma is ignored when reading cents', () => {
   assert.equal(parseAmount('1,234.50'), 123450);
 });
