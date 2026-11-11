@@ -12,7 +12,9 @@ export class StatementError extends Error {
 }
 
 const HEADER = ['date', 'description', 'amount'];
-const HEADER_MESSAGE = 'That file is not a bank statement. Expected columns: Date, Description, Amount.';
+// A plain amount such as 8.58, -2112.90 or 1,234.00, or a bracketed one such as (40.00).
+const AMOUNT = /^(\(-?\d[\d,]*(\.\d+)?\)|-?\d[\d,]*(\.\d+)?)$/;
+const HEADER_MESSAGE ='That file is not a bank statement. Expected columns: Date, Description, Amount.';
 
 // True only for a DD/MM/YYYY date that exists in the calendar, such as 28/02/2026 but not 31/02/2026.
 function isRealDate(text) {
@@ -38,8 +40,9 @@ export function parseStatement(text) {
     const [date, description, amount] = fields;
     if (fields.length !== 3) throw fail('it does not have three columns');
     if (!isRealDate(date)) throw fail('the date is not DD/MM/YYYY');
+    if (!AMOUNT.test(amount.trim())) throw fail('the amount is not a number');
     const cents = parseAmount(amount);
-    if (!Number.isFinite(cents) || !/\d/.test(amount)) throw fail('the amount is not a number');
+    if (!Number.isFinite(cents)) throw fail('the amount is not a number');
     return { date: parseDate(date), description, cents };
   });
 }

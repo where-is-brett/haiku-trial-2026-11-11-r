@@ -115,6 +115,32 @@ test('an amount that is not a number is refused and nothing is stored', () => {
   assert.equal(count(db), 0);
 });
 
+test('an amount with letters in it is refused and nothing is stored', () => {
+  const db = freshDb();
+  assert.throws(() => importStatement(db, 'Date,Description,Amount\n02/08/2026,Bank fee,12abc\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the amount is not a number.',
+  });
+  assert.equal(count(db), 0);
+});
+
+test('an amount with two decimal points is refused', () => {
+  assert.throws(() => parseStatement('Date,Description,Amount\n02/08/2026,Bank fee,1.2.3\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the amount is not a number.',
+  });
+});
+
+test('a bracketed amount is accepted', () => {
+  assert.doesNotThrow(() => parseStatement('Date,Description,Amount\n02/08/2026,Bank fee,(40.00)\n'));
+});
+
+test('plain amounts with a minus sign are read as cents', () => {
+  const [a, b] = parseStatement('Date,Description,Amount\n02/08/2026,Coffee,8.58\n03/08/2026,Refund,-2112.90\n');
+  assert.equal(a.cents, 858);
+  assert.equal(b.cents, -211290);
+});
+
 test('a bad row late in the file stores none of the rows before it', () => {
   const db = freshDb();
   const text = 'Date,Description,Amount\n02/08/2026,Kestrel,6.50\n03/08/2026,Rent,abc\n';
