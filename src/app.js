@@ -1,8 +1,10 @@
 // src/app.js
 import { importStatement, StatementError } from './lib/statement.js';
-import { listMonths } from './lib/months.js';
+import { listMonths, listMonthRows, monthTotal } from './lib/months.js';
+import { formatCents } from './lib/money.js';
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 const CHOOSE_FILE = 'Choose a statement file to import.';
 const TOO_BIG = 'That file is over 5 MB. Choose a smaller statement.';
 const NOT_READ = 'Could not read that file.';
@@ -26,6 +28,28 @@ const IMPORT_FORM = `<form method="post" enctype="multipart/form-data">
 <label>Bank statement (CSV) <input type="file" name="statement"></label>
 <button type="submit">Import</button>
 </form>`;
+
+// Escapes text for use inside HTML, so a description is shown as text and never run.
+export function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Shows one month's transactions and their total.
+function renderMonth(res, db, month) {
+  const rows = listMonthRows(db, month);
+  const items = rows
+    .map((row) => `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.description)}</td><td>${formatCents(row.cents)}</td></tr>`)
+    .join('\n');
+  const table = rows.length > 0 ? `<table>\n<tbody>\n${items}\n</tbody>\n</table>\n` : '';
+  const body = `<h2>Month ${month}</h2>\n${table}<p>Total ${formatCents(monthTotal(rows))}</p>`;
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  res.end(page(body));
+}
 
 // Answers with a status and one plain sentence, shown inside the page.
 function answer(res, status, sentence) {
@@ -79,6 +103,13 @@ export function createHandler({ db, flags }) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(page(body));
       return;
+    }
+    if (url.pathname === '/month' && flags?.['statement-import'] === true) {
+      const month = url.searchParams.get('m');
+      if (month !== null && MONTH_PATTERN.test(month)) {
+        renderMonth(res, db, month);
+        return;
+      }
     }
     if (url.pathname === '/import' && flags?.['statement-import'] === true) {
       if (req.method === 'GET') {
