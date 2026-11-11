@@ -197,6 +197,15 @@ test('an amount too large for exact cents is refused', () => {
   assert.equal(count(db), 0);
 });
 
+test('an amount whose cents are not exact is refused and nothing is stored', () => {
+  const db = freshDb();
+  assert.throws(() => importStatement(db, 'Date,Description,Amount\n02/08/2026,Rent,70368744177664.99\n'), {
+    name: 'StatementError',
+    message: 'Line 2 is not a statement row: the amount is not a number.',
+  });
+  assert.equal(count(db), 0);
+});
+
 test('the sample refund is stored as money coming back', () => {
   const rows = parseStatement(SAMPLE);
   const refund = rows.find((row) => row.description === 'Marlowe Homewares REFUND');

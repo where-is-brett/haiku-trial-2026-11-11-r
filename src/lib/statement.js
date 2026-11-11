@@ -27,6 +27,12 @@ function isRealDate(text) {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
+// The exact cents of an unsigned amount such as 1,234.5, read from its digits with integer arithmetic.
+function exactCents(digits) {
+  const [whole, fraction = ''] = digits.replace(/,/g, '').split('.');
+  return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+}
+
 // Reads a statement into rows of date, description and cents. The first row is the header.
 // Checks every row before returning, and throws StatementError with the first problem found.
 export function parseStatement(text) {
@@ -45,8 +51,11 @@ export function parseStatement(text) {
     if (!AMOUNT.test(amount.trim())) throw fail('the amount is not a number');
     const text = amount.trim();
     const bracketed = text.startsWith('(') && text.endsWith(')');
-    const cents = bracketed ? -Math.abs(parseAmount(text.slice(1, -1))) : parseAmount(amount);
-    if (!Number.isSafeInteger(cents)) throw fail('the amount is not a number');
+    const negative = bracketed || text.startsWith('-');
+    const digits = bracketed ? text.slice(1, -1) : text.replace(/^-/, '');
+    const cents = negative ? -exactCents(digits) : exactCents(digits);
+    const read = bracketed ? -Math.abs(parseAmount(digits)) : parseAmount(amount);
+    if (read !== cents || !Number.isSafeInteger(cents)) throw fail('the amount is not a number');
     return { date: parseDate(date), description, cents };
   });
 }
