@@ -71,7 +71,7 @@ export function createHandler({ db, flags }) {
         const months = listMonths(db);
         if (months.length > 0) {
           const items = months
-            .map(({ month, count }) => `<li><a href="/month?m=${month}">Month ${month}</a> (${count} transactions)</li>`)
+            .map(({ month, count }) => `<li><a href="/month?m=${month}">Month ${month}</a></li>`)
             .join('\n');
           body += `\n<ul>\n${items}\n</ul>`;
         }

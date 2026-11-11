@@ -16,8 +16,8 @@ test('the home page lists months newest first, linking to each month', async () 
     const text = await (await fetch(base + '/')).text();
     const sep = text.indexOf('Month 2026-09');
     assert.ok(sep > -1 && sep < text.indexOf('Month 2026-08'));
-    assert.match(text, /<a href="\/month\?m=2026-09">Month 2026-09<\/a> \(1 transactions\)/);
-    assert.match(text, /<a href="\/month\?m=2026-08">Month 2026-08<\/a> \(2 transactions\)/);
+    assert.match(text, /<li><a href="\/month\?m=2026-09">Month 2026-09<\/a><\/li>/);
+    assert.match(text, /<li><a href="\/month\?m=2026-08">Month 2026-08<\/a><\/li>/);
   });
 });
 
