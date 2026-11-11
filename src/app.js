@@ -1,7 +1,11 @@
 // src/app.js
-import { importStatement } from './lib/statement.js';
+import { importStatement, StatementError } from './lib/statement.js';
 
-const IMPORT_FAILED = 'Could not read that file.';
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const CHOOSE_FILE = 'Choose a statement file to import.';
+const TOO_BIG = 'That file is over 5 MB. Choose a smaller statement.';
+const NOT_READ = 'Could not read that file.';
+const DB_FAILED = 'The ledger could not be updated. Nothing was stored.';
 
 function page(body) {
   return `<!doctype html>
@@ -22,23 +26,38 @@ const IMPORT_FORM = `<form method="post" enctype="multipart/form-data">
 <button type="submit">Import</button>
 </form>`;
 
-// Reads the upload and imports it. Any failure answers 400 with the same plain text.
+// Answers with a status and one plain sentence, shown inside the page.
+function answer(res, status, sentence) {
+  res.writeHead(status, { 'content-type': 'text/html; charset=utf-8' });
+  res.end(page(`<p>${sentence}</p>`));
+}
+
+// Reads the upload and imports it. Each failure answers its own status and sentence.
 async function handleImport(req, res, url, db) {
-  let summary;
+  if (Number(req.headers['content-length']) > MAX_UPLOAD_BYTES) return answer(res, 413, TOO_BIG);
+
+  let statement;
+  let text;
   try {
     const request = new Request(url.href, { method: 'POST', headers: req.headers, body: req, duplex: 'half' });
     const form = await request.formData();
-    const statement = form.get('statement');
-    if (!(statement instanceof File)) throw new Error('no statement file was sent');
-    const { added, skipped } = importStatement(db, await statement.text());
-    summary = `<p>Added ${added}, skipped ${skipped}</p>`;
+    statement = form.get('statement');
+    if (statement instanceof File && statement.size > 0 && statement.size <= MAX_UPLOAD_BYTES) {
+      text = await statement.text();
+    }
   } catch {
-    res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end(IMPORT_FAILED);
-    return;
+    return answer(res, 400, NOT_READ);
   }
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-  res.end(page(summary));
+  if (!(statement instanceof File) || statement.size === 0) return answer(res, 400, CHOOSE_FILE);
+  if (statement.size > MAX_UPLOAD_BYTES) return answer(res, 413, TOO_BIG);
+
+  try {
+    const { added, skipped } = importStatement(db, text);
+    return answer(res, 200, `Added ${added}, skipped ${skipped}`);
+  } catch (err) {
+    if (err instanceof StatementError) return answer(res, 400, err.message);
+    return answer(res, 500, DB_FAILED);
+  }
 }
 
 export function createHandler({ db, flags }) {
@@ -51,7 +70,7 @@ export function createHandler({ db, flags }) {
       res.end(page(body));
       return;
     }
-    if (url.pathname === '/import' && flags['statement-import'] === true) {
+    if (url.pathname === '/import' && flags?.['statement-import'] === true) {
       if (req.method === 'GET') {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
         res.end(page(IMPORT_FORM));

@@ -26,3 +26,9 @@ test('an unknown path is a 404', async () => {
     assert.equal((await fetch(base + '/nope')).status, 404);
   });
 });
+
+test('a null flags object answers 404 for /import and does not throw', async () => {
+  await withServer(createHandler({ db: freshDb(), flags: null }), async (base) => {
+    assert.equal((await fetch(base + '/import')).status, 404);
+  });
+});
